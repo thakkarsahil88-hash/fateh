@@ -118,11 +118,14 @@ Respond with ONLY valid JSON, no markdown:
   })
 
   const rawText = message.content[0].type === 'text' ? message.content[0].text : ''
+  // Strip markdown code fences if Claude wrapped the JSON
+  const cleaned = rawText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
   let planData: any
   try {
-    planData = JSON.parse(rawText)
+    planData = JSON.parse(cleaned)
   } catch {
-    return NextResponse.json({ error: 'Failed to parse AI response' }, { status: 500 })
+    console.error('Raw AI response:', rawText)
+    return NextResponse.json({ error: `Failed to parse AI response: ${rawText.slice(0, 200)}` }, { status: 500 })
   }
 
   // Save plan to Supabase
