@@ -51,6 +51,7 @@ function getDayTemplate(split: SplitType, days: number): { label: string; muscle
 }
 
 export async function POST(req: NextRequest) {
+  try {
   const supabase = getSupabase()
   const body = await req.json()
   const { phone, days_per_week, split_type, duration_mins, equipment, goal } = body as {
@@ -176,4 +177,8 @@ Respond with ONLY valid JSON, no markdown:
   await supabase.from('fateh_profiles').update({ current_plan_id: plan.id }).eq('phone', phone)
 
   return NextResponse.json({ plan_id: plan.id })
+  } catch (e: any) {
+    console.error('plan-generate error:', e)
+    return NextResponse.json({ error: e?.message ?? String(e) }, { status: 500 })
+  }
 }

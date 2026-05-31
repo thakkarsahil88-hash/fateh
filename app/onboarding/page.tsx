@@ -70,7 +70,10 @@ export default function OnboardingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...data, phone }),
       })
-      if (!res.ok) throw new Error('Failed to generate plan')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error ?? 'Failed to generate plan')
+      }
       router.push('/home')
       router.refresh()
     } catch (e: any) {
