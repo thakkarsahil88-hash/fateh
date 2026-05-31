@@ -2,11 +2,16 @@
 
 import { useState, useEffect } from 'react'
 
-const KEY = 'fateh_phone'
+const KEY = 'fateh_uid'
 
 export function getStoredPhone(): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem(KEY)
+  let uid = localStorage.getItem(KEY)
+  if (!uid) {
+    uid = crypto.randomUUID()
+    localStorage.setItem(KEY, uid)
+  }
+  return uid
 }
 
 export function setStoredPhone(phone: string) {
@@ -18,7 +23,7 @@ export function usePhone() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    setPhoneState(localStorage.getItem(KEY))
+    setPhoneState(getStoredPhone())
     setReady(true)
   }, [])
 
