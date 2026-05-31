@@ -37,7 +37,7 @@ export default function LoginPage() {
       .upsert({ phone: cleaned }, { onConflict: 'phone', ignoreDuplicates: true })
 
     if (error) {
-      setError('Something went wrong. Try again.')
+      setError(error.message || JSON.stringify(error))
       setLoading(false)
       return
     }
