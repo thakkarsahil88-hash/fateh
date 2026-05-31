@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk' // eslint-disable-line
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createClient } from '@supabase/supabase-js'
 import { EXERCISES } from '@/lib/exercises'
 import type { SplitType, Equipment, MuscleGroup } from '@/lib/types'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
 
 // Map split type + days to day labels and muscle groups
 function getDayTemplate(split: SplitType, days: number): { label: string; muscle_groups: MuscleGroup[] }[] {
@@ -44,12 +51,10 @@ function getDayTemplate(split: SplitType, days: number): { label: string; muscle
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
+  const supabase = getSupabase()
   const body = await req.json()
-  const { days_per_week, split_type, duration_mins, equipment, goal } = body as {
+  const { phone, days_per_week, split_type, duration_mins, equipment, goal } = body as {
+    phone: string
     days_per_week: number
     split_type: SplitType
     duration_mins: number
@@ -123,7 +128,7 @@ Respond with ONLY valid JSON, no markdown:
   const { data: plan, error: planError } = await supabase
     .from('fateh_plans')
     .insert({
-      user_id: user.id,
+      phone,
       name: planData.plan_name ?? `${split_type} Plan`,
       split_type,
       days_per_week,
@@ -168,7 +173,7 @@ Respond with ONLY valid JSON, no markdown:
   }
 
   // Set as current plan on profile
-  await supabase.from('fateh_profiles').update({ current_plan_id: plan.id }).eq('id', user.id)
+  await supabase.from('fateh_profiles').update({ current_plan_id: plan.id }).eq('phone', phone)
 
   return NextResponse.json({ plan_id: plan.id })
 }

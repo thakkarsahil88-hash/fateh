@@ -62,10 +62,13 @@ export default function OnboardingPage() {
     setGenerating(true)
     setError('')
     try {
+      const { getStoredPhone } = await import('@/lib/usePhone')
+      const phone = getStoredPhone()
+      if (!phone) { window.location.href = '/login'; return }
       const res = await fetch('/api/plan-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, phone }),
       })
       if (!res.ok) throw new Error('Failed to generate plan')
       router.push('/home')

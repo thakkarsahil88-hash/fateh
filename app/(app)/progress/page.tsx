@@ -1,44 +1,50 @@
-import { redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { getStoredPhone } from '@/lib/usePhone'
+import { createClient } from '@/lib/supabase'
 import ProgressClient from './ProgressClient'
 import { format, subDays } from 'date-fns'
 
-export default async function ProgressPage() {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+export default function ProgressPage() {
+  const router = useRouter()
+  const [data, setData] = useState<any>(null)
 
-  const since = format(subDays(new Date(), 90), 'yyyy-MM-dd')
+  useEffect(() => {
+    const phone = getStoredPhone()
+    if (!phone) { router.replace('/login'); return }
 
-  // Body weight history
-  const { data: weightLog } = await supabase
-    .from('fateh_body_weight_log')
-    .select('date, weight_kg')
-    .eq('user_id', user.id)
-    .gte('date', since)
-    .order('date')
+    const supabase = createClient()
+    const since = format(subDays(new Date(), 90), 'yyyy-MM-dd')
+    const todayDate = format(new Date(), 'yyyy-MM-dd')
 
-  // Workout dates for calendar heatmap
-  const { data: workoutDates } = await supabase
-    .from('fateh_workout_logs')
-    .select('date')
-    .eq('user_id', user.id)
-    .gte('date', since)
-    .order('date')
+    async function load() {
+      const [weightRes, workoutRes, logsRes] = await Promise.all([
+        supabase.from('fateh_body_weight_log').select('date, weight_kg').eq('phone', phone).gte('date', since).order('date'),
+        supabase.from('fateh_workout_logs').select('date').eq('phone', phone).gte('date', since).order('date'),
+        supabase.from('fateh_exercise_logs')
+          .select('sets, exercise_id, workout_logs:fateh_workout_logs!inner(date, phone)')
+          .eq('workout_logs.phone', phone)
+          .gte('workout_logs.date', since),
+      ])
 
-  // Volume per week — get exercise logs with sets
-  const { data: exerciseLogs } = await supabase
-    .from('fateh_exercise_logs')
-    .select('sets, exercise_id, workout_logs:fateh_workout_logs!inner(date, user_id)')
-    .eq('workout_logs.user_id', user.id)
-    .gte('workout_logs.date', since)
+      setData({
+        weightLog: weightRes.data ?? [],
+        workoutDates: (workoutRes.data ?? []).map((w: any) => w.date),
+        exerciseLogs: logsRes.data ?? [],
+        todayDate,
+      })
+    }
 
-  return (
-    <ProgressClient
-      weightLog={weightLog ?? []}
-      workoutDates={(workoutDates ?? []).map(w => w.date)}
-      exerciseLogs={exerciseLogs ?? []}
-      todayDate={format(new Date(), 'yyyy-MM-dd')}
-    />
+    load()
+  }, [router])
+
+  if (!data) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+    </div>
   )
+
+  return <ProgressClient {...data} />
 }
