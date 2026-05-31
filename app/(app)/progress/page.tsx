@@ -12,7 +12,7 @@ export default async function ProgressPage() {
 
   // Body weight history
   const { data: weightLog } = await supabase
-    .from('body_weight_log')
+    .from('fateh_body_weight_log')
     .select('date, weight_kg')
     .eq('user_id', user.id)
     .gte('date', since)
@@ -20,7 +20,7 @@ export default async function ProgressPage() {
 
   // Workout dates for calendar heatmap
   const { data: workoutDates } = await supabase
-    .from('workout_logs')
+    .from('fateh_workout_logs')
     .select('date')
     .eq('user_id', user.id)
     .gte('date', since)
@@ -28,8 +28,8 @@ export default async function ProgressPage() {
 
   // Volume per week — get exercise logs with sets
   const { data: exerciseLogs } = await supabase
-    .from('exercise_logs')
-    .select('sets, exercise_id, workout_logs!inner(date, user_id)')
+    .from('fateh_exercise_logs')
+    .select('sets, exercise_id, workout_logs:fateh_workout_logs!inner(date, user_id)')
     .eq('workout_logs.user_id', user.id)
     .gte('workout_logs.date', since)
 

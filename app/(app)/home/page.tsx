@@ -9,8 +9,8 @@ export default async function HomePage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('profiles')
-    .select('*, plans(*)')
+    .from('fateh_profiles')
+    .select('*, fateh_plans(*)')
     .eq('id', user.id)
     .single()
 
@@ -22,15 +22,15 @@ export default async function HomePage() {
 
   // Get today's plan day
   const { data: todayPlanDay } = await supabase
-    .from('plan_days')
-    .select('*, plan_exercises(*, )')
+    .from('fateh_plan_days')
+    .select('*, plan_exercises:fateh_plan_exercises(*)')
     .eq('plan_id', profile.current_plan_id)
     .eq('day_of_week', dayOfWeek)
     .single()
 
   // Get last 30 workout dates for streak/calendar
   const { data: recentWorkouts } = await supabase
-    .from('workout_logs')
+    .from('fateh_workout_logs')
     .select('date')
     .eq('user_id', user.id)
     .gte('date', format(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'))
@@ -38,7 +38,7 @@ export default async function HomePage() {
 
   // Latest body weight
   const { data: latestWeight } = await supabase
-    .from('body_weight_log')
+    .from('fateh_body_weight_log')
     .select('*')
     .eq('user_id', user.id)
     .order('date', { ascending: false })

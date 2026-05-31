@@ -8,7 +8,7 @@ export default async function RootPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('profiles')
+    .from('fateh_profiles')
     .select('current_plan_id')
     .eq('id', user.id)
     .single()

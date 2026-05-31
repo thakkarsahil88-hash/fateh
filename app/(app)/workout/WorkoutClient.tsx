@@ -62,7 +62,7 @@ export default function WorkoutClient({ userId, planDay, todayDate }: Props) {
     const durationMins = Math.round((Date.now() - startTime.current) / 60000)
 
     const { data: workoutLog, error } = await supabase
-      .from('workout_logs')
+      .from('fateh_workout_logs')
       .insert({
         user_id: userId,
         plan_day_id: planDay?.id,
@@ -80,7 +80,7 @@ export default function WorkoutClient({ userId, planDay, todayDate }: Props) {
       sets: states[pe.exercise_id].sets.filter(s => s.reps > 0),
     }))
 
-    await supabase.from('exercise_logs').insert(exerciseLogs)
+    await supabase.from('fateh_exercise_logs').insert(exerciseLogs)
 
     setDone(true)
     setTimeout(() => { router.push('/home'); router.refresh() }, 1500)

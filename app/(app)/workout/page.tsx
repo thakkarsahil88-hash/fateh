@@ -9,7 +9,7 @@ export default async function WorkoutPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase
-    .from('profiles')
+    .from('fateh_profiles')
     .select('current_plan_id')
     .eq('id', user.id)
     .single()
@@ -19,8 +19,8 @@ export default async function WorkoutPage() {
   const dayOfWeek = (new Date().getDay() + 6) % 7
 
   const { data: planDay } = await supabase
-    .from('plan_days')
-    .select('*, plan_exercises(exercise_id, sets, reps, rest_seconds, sort_order)')
+    .from('fateh_plan_days')
+    .select('*, plan_exercises:fateh_plan_exercises(exercise_id, sets, reps, rest_seconds, sort_order)')
     .eq('plan_id', profile.current_plan_id)
     .eq('day_of_week', dayOfWeek)
     .single()

@@ -121,7 +121,7 @@ Respond with ONLY valid JSON, no markdown:
 
   // Save plan to Supabase
   const { data: plan, error: planError } = await supabase
-    .from('plans')
+    .from('fateh_plans')
     .insert({
       user_id: user.id,
       name: planData.plan_name ?? `${split_type} Plan`,
@@ -136,15 +136,13 @@ Respond with ONLY valid JSON, no markdown:
 
   if (planError) return NextResponse.json({ error: planError.message }, { status: 500 })
 
-  // Assign workout days to the week evenly
-  const dayOfWeekMap = [0, 1, 2, 3, 4, 5, 6] // Mon-Sun
   const spacing = Math.floor(7 / days_per_week)
 
   for (let i = 0; i < planData.days.length; i++) {
     const dayInfo = planData.days[i]
     const template = dayTemplates[i]
     const { data: planDay, error: dayError } = await supabase
-      .from('plan_days')
+      .from('fateh_plan_days')
       .insert({
         plan_id: plan.id,
         day_of_week: (i * spacing) % 7,
@@ -166,11 +164,11 @@ Respond with ONLY valid JSON, no markdown:
       sort_order: j,
     }))
 
-    await supabase.from('plan_exercises').insert(exerciseRows)
+    await supabase.from('fateh_plan_exercises').insert(exerciseRows)
   }
 
   // Set as current plan on profile
-  await supabase.from('profiles').update({ current_plan_id: plan.id }).eq('id', user.id)
+  await supabase.from('fateh_profiles').update({ current_plan_id: plan.id }).eq('id', user.id)
 
   return NextResponse.json({ plan_id: plan.id })
 }

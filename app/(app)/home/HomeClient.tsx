@@ -40,7 +40,7 @@ export default function HomeClient({ profile, todayPlanDay, workoutDates, latest
   async function logWeight() {
     if (!weight) return
     const supabase = createClient()
-    await supabase.from('body_weight_log').upsert({
+    await supabase.from('fateh_body_weight_log').upsert({
       user_id: profile.id,
       date: todayDate,
       weight_kg: parseFloat(weight),

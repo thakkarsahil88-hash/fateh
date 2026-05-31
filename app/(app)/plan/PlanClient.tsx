@@ -22,7 +22,7 @@ export default function PlanClient({ plan, planDays }: Props) {
   async function swapExercise(planDayId: string, oldExId: string, newExId: string) {
     const supabase = createClient()
     await supabase
-      .from('plan_exercises')
+      .from('fateh_plan_exercises')
       .update({ exercise_id: newExId })
       .eq('plan_day_id', planDayId)
       .eq('exercise_id', oldExId)
