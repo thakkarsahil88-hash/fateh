@@ -1,16 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Flame, Scale } from 'lucide-react'
-import { saveWeight } from '@/lib/storage'
+import { saveWeight, resetDayIndex } from '@/lib/storage'
 import { getExerciseById } from '@/lib/exercises'
 import { cn } from '@/lib/utils'
 import type { StoredPlan } from '@/lib/storage'
 
 interface Props {
   plan: StoredPlan
-  todayPlanDay: any
+  currentDayIndex: number
+  alreadyWorkedOut: boolean
   workoutDates: string[]
   latestWeight: number | null
   todayDate: string
@@ -26,14 +27,16 @@ function calcStreak(dates: string[], today: string): number {
   return streak
 }
 
-export default function HomeClient({ plan, todayPlanDay, workoutDates, latestWeight, todayDate }: Props) {
+export default function HomeClient({ plan, currentDayIndex, alreadyWorkedOut, workoutDates, latestWeight, todayDate }: Props) {
+  const router = useRouter()
   const [weight, setWeight] = useState('')
   const [showWeightInput, setShowWeightInput] = useState(false)
   const [currentWeight, setCurrentWeight] = useState(latestWeight)
+  const [isRest, setIsRest] = useState(false)
 
   const streak = calcStreak(workoutDates, todayDate)
-  const alreadyWorkedOut = workoutDates.includes(todayDate)
-  const exercises = todayPlanDay?.exercises ?? []
+  const currentPlanDay = plan.days[currentDayIndex % plan.days.length]
+  const exercises = currentPlanDay?.exercises ?? []
 
   function logWeight() {
     if (!weight) return
@@ -42,6 +45,15 @@ export default function HomeClient({ plan, todayPlanDay, workoutDates, latestWei
     setCurrentWeight(w)
     setShowWeightInput(false)
     setWeight('')
+  }
+
+  function handleStartWorkout() {
+    router.push('/workout')
+  }
+
+  function handleStartFresh() {
+    resetDayIndex()
+    router.push('/workout')
   }
 
   return (
@@ -93,17 +105,67 @@ export default function HomeClient({ plan, todayPlanDay, workoutDates, latestWei
         </div>
       )}
 
-      {/* Today's workout */}
-      <div>
-        <h2 className="text-lg font-semibold mb-3">Today's Workout</h2>
-        {todayPlanDay ? (
+      {/* ── Already worked out today ── */}
+      {alreadyWorkedOut && (
+        <div className="bg-zinc-900 rounded-2xl p-5 border border-green-500/20">
+          <div className="text-2xl mb-2">✅</div>
+          <p className="font-semibold text-green-400">Done for today!</p>
+          <p className="text-sm text-zinc-400 mt-1">
+            Next up: <span className="text-white font-medium">
+              {plan.days[(currentDayIndex) % plan.days.length]?.label}
+            </span>
+          </p>
+          <button onClick={handleStartWorkout}
+            className="mt-3 text-sm text-zinc-400 hover:text-orange-400 underline transition-colors">
+            Log another session anyway
+          </button>
+        </div>
+      )}
+
+      {/* ── Rest day or workout? ── */}
+      {!alreadyWorkedOut && !isRest && (
+        <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800">
+          <p className="font-semibold text-lg mb-1">How's today?</p>
+          <p className="text-zinc-400 text-sm mb-4">
+            Up next: <span className="text-orange-400 font-semibold">{currentPlanDay?.label}</span>
+            <span className="text-zinc-500"> · Day {currentDayIndex + 1} of {plan.days.length}</span>
+          </p>
+          <div className="flex gap-3">
+            <button onClick={() => setIsRest(true)}
+              className="flex-1 py-3 rounded-xl bg-zinc-800 text-zinc-300 font-medium hover:bg-zinc-700 transition-colors">
+              😴 Rest day
+            </button>
+            <button onClick={handleStartWorkout}
+              className="flex-1 py-3 rounded-xl bg-orange-500 text-white font-medium hover:bg-orange-600 transition-colors">
+              💪 Let's go!
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Rest day chosen ── */}
+      {!alreadyWorkedOut && isRest && (
+        <div className="bg-zinc-900 rounded-2xl p-5 border border-zinc-800 text-center space-y-3">
+          <div className="text-4xl">🛋️</div>
+          <p className="font-semibold">Rest day — recover well</p>
+          <p className="text-sm text-zinc-400">
+            Next: <span className="text-orange-400">{currentPlanDay?.label}</span> whenever you're ready
+          </p>
+          <button onClick={() => setIsRest(false)}
+            className="text-sm text-zinc-500 hover:text-orange-400 transition-colors underline">
+            Changed my mind — work out
+          </button>
+        </div>
+      )}
+
+      {/* ── Workout preview (shown when ready) ── */}
+      {!alreadyWorkedOut && !isRest && (
+        <div>
+          <h2 className="text-base font-semibold mb-3">Today's Plan</h2>
           <div className="bg-zinc-900 rounded-2xl overflow-hidden">
-            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
-              <div>
-                <div className="font-semibold text-lg">{todayPlanDay.label}</div>
-                <div className="text-sm text-zinc-400">{exercises.length} exercises · {todayPlanDay.muscle_groups?.slice(0,3).join(', ')}</div>
-              </div>
-              {alreadyWorkedOut && <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">Done ✓</span>}
+            <div className="p-4 border-b border-zinc-800">
+              <div className="font-semibold text-lg">{currentPlanDay?.label}</div>
+              <div className="text-sm text-zinc-400">{exercises.length} exercises · {currentPlanDay?.muscle_groups?.slice(0,3).join(', ')}</div>
             </div>
             <div className="divide-y divide-zinc-800">
               {exercises.slice(0, 4).map((pe: any) => {
@@ -121,20 +183,20 @@ export default function HomeClient({ plan, todayPlanDay, workoutDates, latestWei
               })}
               {exercises.length > 4 && <div className="px-4 py-2 text-xs text-zinc-500">+{exercises.length - 4} more</div>}
             </div>
-            <div className="p-4">
-              <Link href="/workout" className="block w-full text-center bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-colors">
-                {alreadyWorkedOut ? 'View Workout' : `Start ${todayPlanDay.label} →`}
-              </Link>
+            <div className="p-4 flex gap-2">
+              <button onClick={handleStartWorkout}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-colors">
+                Start {currentPlanDay?.label} →
+              </button>
+              <button onClick={handleStartFresh}
+                className="px-4 py-3 rounded-xl bg-zinc-800 text-zinc-400 hover:text-white text-sm transition-colors"
+                title="Restart from Day 1">
+                ↺
+              </button>
             </div>
           </div>
-        ) : (
-          <div className="bg-zinc-900 rounded-2xl p-6 text-center space-y-1">
-            <div className="text-3xl">🛋️</div>
-            <p className="font-medium text-zinc-300">Rest day</p>
-            <p className="text-sm text-zinc-500">Recover well — next session coming up</p>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Mini calendar */}
       <div>

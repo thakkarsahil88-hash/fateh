@@ -10,8 +10,8 @@ export interface StoredExercise {
 
 export interface StoredPlanDay {
   id: string
-  day_of_week: number   // 0=Mon .. 6=Sun
-  label: string
+  day_index: number      // sequential: 0, 1, 2 for PPL
+  label: string          // "Push", "Pull", "Legs"
   muscle_groups: string[]
   exercises: StoredExercise[]
 }
@@ -56,6 +56,7 @@ const KEYS = {
   plan: 'fateh_plan',
   workouts: 'fateh_workouts',
   weight: 'fateh_weight',
+  dayIndex: 'fateh_day_index',
 }
 
 export function getPlan(): StoredPlan | null {
@@ -63,6 +64,16 @@ export function getPlan(): StoredPlan | null {
 }
 export function savePlan(plan: StoredPlan) { localStorage.setItem(KEYS.plan, JSON.stringify(plan)) }
 export function clearPlan() { localStorage.removeItem(KEYS.plan) }
+
+export function getCurrentDayIndex(): number {
+  return parseInt(localStorage.getItem(KEYS.dayIndex) ?? '0', 10)
+}
+export function setCurrentDayIndex(n: number) { localStorage.setItem(KEYS.dayIndex, String(n)) }
+export function advanceDayIndex(totalDays: number) {
+  const next = (getCurrentDayIndex() + 1) % totalDays
+  setCurrentDayIndex(next)
+}
+export function resetDayIndex() { setCurrentDayIndex(0) }
 
 export function getWorkouts(): WorkoutLog[] {
   try { const r = localStorage.getItem(KEYS.workouts); return r ? JSON.parse(r) : [] } catch { return [] }

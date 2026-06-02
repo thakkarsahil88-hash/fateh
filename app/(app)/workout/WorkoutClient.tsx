@@ -3,13 +3,14 @@
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle, ChevronDown, ChevronUp, Loader2, Plus, Minus } from 'lucide-react'
-import { saveWorkout } from '@/lib/storage'
+import { saveWorkout, advanceDayIndex } from '@/lib/storage'
 import { getExerciseById } from '@/lib/exercises'
 import type { SetLog, StoredPlan } from '@/lib/storage'
 
 interface Props {
   plan: StoredPlan
   planDay: any
+  currentDayIndex: number
   todayDate: string
 }
 
@@ -24,7 +25,7 @@ async function preCacheGifs(urls: string[]) {
   } catch {}
 }
 
-export default function WorkoutClient({ plan, planDay, todayDate }: Props) {
+export default function WorkoutClient({ plan, planDay, currentDayIndex, todayDate }: Props) {
   const router = useRouter()
   const startTime = useRef(Date.now())
   const [saving, setSaving] = useState(false)
@@ -84,6 +85,7 @@ export default function WorkoutClient({ plan, planDay, todayDate }: Props) {
         sets: states[pe.exercise_id].sets.filter(s => s.reps > 0 || s.is_bodyweight),
       })),
     })
+    advanceDayIndex(plan.days.length)
     setDone(true)
     setTimeout(() => router.push('/home'), 1500)
   }

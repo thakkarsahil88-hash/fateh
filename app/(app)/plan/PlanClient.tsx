@@ -112,7 +112,7 @@ export default function PlanClient({ plan: initialPlan }: { plan: StoredPlan }) 
             <button onClick={() => setExpanded(isOpen ? null : day.id)} className="w-full flex items-center justify-between p-4">
               <div>
                 <div className="font-semibold">{day.label}</div>
-                <div className="text-xs text-zinc-400">{DAY_NAMES[day.day_of_week]} · {exs.length} exercises</div>
+                <div className="text-xs text-zinc-400">Day {day.day_index + 1} · {exs.length} exercises</div>
               </div>
               {isOpen ? <ChevronUp size={18} className="text-zinc-500" /> : <ChevronDown size={18} className="text-zinc-500" />}
             </button>

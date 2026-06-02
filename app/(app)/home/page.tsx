@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getPlan, getWorkoutDates, getLatestWeight } from '@/lib/storage'
+import { getPlan, getCurrentDayIndex, getWorkoutDates, getLatestWeight } from '@/lib/storage'
 import HomeClient from './HomeClient'
 import { format } from 'date-fns'
 
@@ -14,15 +14,15 @@ export default function HomePage() {
     const plan = getPlan()
     if (!plan) { router.replace('/onboarding'); return }
 
-    const today = new Date()
-    const todayISO = format(today, 'yyyy-MM-dd')
-    const dayOfWeek = (today.getDay() + 6) % 7 // 0=Mon
-    const todayPlanDay = plan.days.find((d: any) => d.day_of_week === dayOfWeek) ?? null
+    const todayISO = format(new Date(), 'yyyy-MM-dd')
+    const currentDayIndex = getCurrentDayIndex()
+    const workoutDates = getWorkoutDates()
 
     setData({
       plan,
-      todayPlanDay,
-      workoutDates: getWorkoutDates(),
+      currentDayIndex,
+      alreadyWorkedOut: workoutDates.includes(todayISO),
+      workoutDates,
       latestWeight: getLatestWeight(),
       todayDate: todayISO,
     })

@@ -90,7 +90,7 @@ Respond ONLY with valid JSON (no markdown):
       created_at: new Date().toISOString(),
       days: aiPlan.days.map((d: any, i: number) => ({
         id: crypto.randomUUID(),
-        day_of_week: dayTemplates[i].day_of_week,
+        day_index: i,
         label: dayTemplates[i].label,
         muscle_groups: dayTemplates[i].muscle_groups,
         exercises: d.exercises.map((ex: any, j: number) => ({
