@@ -1,30 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { EXERCISES } from '@/lib/exercises'
-import type { SplitType, Equipment, MuscleGroup } from '@/lib/types'
+import type { MuscleGroup } from '@/lib/types'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-function getDayTemplate(split: SplitType, days: number): { label: string; muscle_groups: MuscleGroup[] }[] {
-  const templates: Record<string, { label: string; muscle_groups: MuscleGroup[] }[]> = {
-    PPL: [
-      { label: 'Push', muscle_groups: ['chest', 'shoulders', 'triceps'] as MuscleGroup[] },
-      { label: 'Pull', muscle_groups: ['back', 'biceps'] as MuscleGroup[] },
-      { label: 'Legs', muscle_groups: ['legs', 'glutes', 'core'] as MuscleGroup[] },
-    ],
-    ULUL: [
-      { label: 'Upper', muscle_groups: ['chest', 'back', 'shoulders', 'biceps', 'triceps'] as MuscleGroup[] },
-      { label: 'Lower', muscle_groups: ['legs', 'glutes', 'core'] as MuscleGroup[] },
-      { label: 'Upper', muscle_groups: ['chest', 'back', 'shoulders', 'biceps', 'triceps'] as MuscleGroup[] },
-      { label: 'Lower', muscle_groups: ['legs', 'glutes', 'core'] as MuscleGroup[] },
-    ],
-  }
-  return (templates[split] ?? templates['PPL']).slice(0, days)
+// Auto-assign days of week based on split — no user input needed
+// PPL  → Mon(0), Wed(2), Fri(4)
+// ULUL → Mon(0), Tue(1), Thu(3), Fri(4)
+const SPLIT_DAYS: Record<string, { label: string; muscle_groups: MuscleGroup[]; day_of_week: number }[]> = {
+  PPL: [
+    { label: 'Push', muscle_groups: ['chest', 'shoulders', 'triceps'], day_of_week: 0 },
+    { label: 'Pull', muscle_groups: ['back', 'biceps'],               day_of_week: 2 },
+    { label: 'Legs', muscle_groups: ['legs', 'glutes', 'core'],       day_of_week: 4 },
+  ],
+  ULUL: [
+    { label: 'Upper', muscle_groups: ['chest', 'back', 'shoulders', 'biceps', 'triceps'], day_of_week: 0 },
+    { label: 'Lower', muscle_groups: ['legs', 'glutes', 'core'],                           day_of_week: 1 },
+    { label: 'Upper', muscle_groups: ['chest', 'back', 'shoulders', 'biceps', 'triceps'], day_of_week: 3 },
+    { label: 'Lower', muscle_groups: ['legs', 'glutes', 'core'],                           day_of_week: 4 },
+  ],
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { days_per_week, split_type, selected_days, duration_mins, equipment, goal } = await req.json()
+    const { split_type, duration_mins, equipment, goal } = await req.json()
+
+    const dayTemplates = SPLIT_DAYS[split_type] ?? SPLIT_DAYS['PPL']
+    const days_per_week = dayTemplates.length
 
     const availableExercises = EXERCISES.filter(e =>
       e.equipment.some(eq => equipment.includes(eq))
@@ -34,13 +37,10 @@ export async function POST(req: NextRequest) {
       `${e.id} | ${e.name} | muscles: ${e.muscle_groups.join(',')} | difficulty: ${e.difficulty}`
     ).join('\n')
 
-    const dayTemplates = getDayTemplate(split_type as SplitType, days_per_week)
-
     const prompt = `You are designing a home gym workout plan.
 
 User details:
 - Split: ${split_type}
-- Days per week: ${days_per_week}
 - Session duration: ${duration_mins} minutes
 - Goal: ${goal}
 - Equipment: ${equipment.join(', ')}
@@ -48,26 +48,21 @@ User details:
 Available exercises (id | name | muscles | difficulty):
 ${exerciseSummary}
 
-Day structure (sequential, not tied to specific weekdays):
-${dayTemplates.map((d, i) => `Day ${i + 1}: ${d.label} — targets: ${d.muscle_groups.join(', ')}`).join('\n')}
+Day structure:
+${dayTemplates.map((d, i) => `Day ${i + 1} (${d.label}): targets ${d.muscle_groups.join(', ')}`).join('\n')}
 
 Rules:
-- For ${duration_mins} min sessions, assign ${duration_mins <= 30 ? '4-5' : duration_mins <= 45 ? '5-6' : duration_mins <= 60 ? '6-8' : '8-10'} exercises per day
-- Goal "${goal}": ${goal === 'strength' ? 'prioritize compound movements, 3-5 reps' : goal === 'hypertrophy' ? 'mix of compounds and isolation, 8-12 reps' : goal === 'endurance' ? 'higher reps 15-20, shorter rest' : 'circuit-friendly, high reps 12-15'}
-- Only use exercises with appropriate muscles for each day
-- Include at least 1 core exercise per Legs or Lower day
-- Vary exercises across days (no same exercise on back-to-back days)
+- Assign ${duration_mins <= 30 ? '4-5' : duration_mins <= 45 ? '5-6' : duration_mins <= 60 ? '6-8' : '8-10'} exercises per day
+- Goal "${goal}": ${goal === 'strength' ? 'compound movements, 3-5 reps' : goal === 'hypertrophy' ? '8-12 reps, mix compounds + isolation' : goal === 'endurance' ? '15-20 reps, short rest' : '12-15 reps, high intensity'}
+- Only use exercises matching each day's muscle groups
+- Include 1 core exercise per Legs/Lower day
+- No same exercise on consecutive days
 
-Respond with ONLY valid JSON, no markdown:
+Respond ONLY with valid JSON (no markdown):
 {
   "plan_name": "string",
   "days": [
-    {
-      "label": "string",
-      "exercises": [
-        {"exercise_id": "string", "sets": number, "reps": "string", "rest_seconds": number}
-      ]
-    }
+    { "label": "string", "exercises": [{"exercise_id": "string", "sets": number, "reps": "string", "rest_seconds": number}] }
   ]
 }`
 
@@ -81,11 +76,8 @@ Respond with ONLY valid JSON, no markdown:
     const cleaned = rawText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
 
     let aiPlan: any
-    try {
-      aiPlan = JSON.parse(cleaned)
-    } catch {
-      return NextResponse.json({ error: 'AI returned invalid response. Please try again.' }, { status: 500 })
-    }
+    try { aiPlan = JSON.parse(cleaned) }
+    catch { return NextResponse.json({ error: 'AI returned invalid response. Try again.' }, { status: 500 }) }
 
     const plan = {
       id: crypto.randomUUID(),
@@ -95,13 +87,12 @@ Respond with ONLY valid JSON, no markdown:
       duration_mins,
       equipment,
       goal,
-      selected_days,              // which days of week are training days
       created_at: new Date().toISOString(),
       days: aiPlan.days.map((d: any, i: number) => ({
         id: crypto.randomUUID(),
-        day_index: i,             // sequential index, not day of week
-        label: dayTemplates[i]?.label ?? d.label,
-        muscle_groups: dayTemplates[i]?.muscle_groups ?? [],
+        day_of_week: dayTemplates[i].day_of_week,
+        label: dayTemplates[i].label,
+        muscle_groups: dayTemplates[i].muscle_groups,
         exercises: d.exercises.map((ex: any, j: number) => ({
           exercise_id: ex.exercise_id,
           sets: ex.sets,

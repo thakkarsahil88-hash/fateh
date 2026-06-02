@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getPlan, getCurrentDayIndex } from '@/lib/storage'
+import { getPlan } from '@/lib/storage'
 import WorkoutClient from './WorkoutClient'
 import { format } from 'date-fns'
 
@@ -14,15 +14,11 @@ export default function WorkoutPage() {
     const plan = getPlan()
     if (!plan) { router.replace('/onboarding'); return }
 
-    const currentDayIndex = getCurrentDayIndex()
-    const planDay = plan.days[currentDayIndex % plan.days.length]
+    const today = new Date()
+    const dayOfWeek = (today.getDay() + 6) % 7
+    const planDay = plan.days.find((d: any) => d.day_of_week === dayOfWeek) ?? null
 
-    setData({
-      plan,
-      planDay,
-      currentDayIndex,
-      todayDate: format(new Date(), 'yyyy-MM-dd'),
-    })
+    setData({ plan, planDay, todayDate: format(today, 'yyyy-MM-dd') })
   }, [router])
 
   if (!data) return (
