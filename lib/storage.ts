@@ -10,8 +10,8 @@ export interface StoredExercise {
 
 export interface StoredPlanDay {
   id: string
-  day_of_week: number
-  label: string
+  day_index: number        // position in sequence: 0, 1, 2 for PPL
+  label: string            // "Push", "Pull", "Legs"
   muscle_groups: string[]
   exercises: StoredExercise[]
 }
@@ -24,6 +24,7 @@ export interface StoredPlan {
   duration_mins: number
   equipment: string[]
   goal: string
+  selected_days: number[]  // which days of week user trains (0=Mon..6=Sun)
   days: StoredPlanDay[]
   created_at: string
 }
@@ -42,7 +43,7 @@ export interface ExerciseLog {
 export interface WorkoutLog {
   id: string
   date: string
-  plan_day_id: string
+  plan_day_index: number
   plan_day_label: string
   duration_mins: number
   exercises: ExerciseLog[]
@@ -57,16 +58,28 @@ const KEYS = {
   plan: 'fateh_plan',
   workouts: 'fateh_workouts',
   weight: 'fateh_weight',
+  dayIndex: 'fateh_day_index',
 }
 
+// ── Plan ──────────────────────────────────────────────────────────────────────
 export function getPlan(): StoredPlan | null {
   try { const r = localStorage.getItem(KEYS.plan); return r ? JSON.parse(r) : null } catch { return null }
 }
-export function savePlan(plan: StoredPlan) {
-  localStorage.setItem(KEYS.plan, JSON.stringify(plan))
-}
+export function savePlan(plan: StoredPlan) { localStorage.setItem(KEYS.plan, JSON.stringify(plan)) }
 export function clearPlan() { localStorage.removeItem(KEYS.plan) }
 
+// ── Current day index (which day in the plan sequence we're on) ───────────────
+export function getCurrentDayIndex(): number {
+  return parseInt(localStorage.getItem(KEYS.dayIndex) ?? '0', 10)
+}
+export function setCurrentDayIndex(n: number) { localStorage.setItem(KEYS.dayIndex, String(n)) }
+export function advanceDayIndex(plan: StoredPlan) {
+  const next = (getCurrentDayIndex() + 1) % plan.days.length
+  setCurrentDayIndex(next)
+}
+export function resetDayIndex() { setCurrentDayIndex(0) }
+
+// ── Workouts ──────────────────────────────────────────────────────────────────
 export function getWorkouts(): WorkoutLog[] {
   try { const r = localStorage.getItem(KEYS.workouts); return r ? JSON.parse(r) : [] } catch { return [] }
 }
@@ -76,7 +89,11 @@ export function saveWorkout(log: WorkoutLog) {
   localStorage.setItem(KEYS.workouts, JSON.stringify(logs))
 }
 export function getWorkoutDates(): string[] { return getWorkouts().map(w => w.date) }
+export function getTodayWorkout(date: string): WorkoutLog | null {
+  return getWorkouts().find(w => w.date === date) ?? null
+}
 
+// ── Body weight ───────────────────────────────────────────────────────────────
 export function getWeightLog(): WeightEntry[] {
   try { const r = localStorage.getItem(KEYS.weight); return r ? JSON.parse(r) : [] } catch { return [] }
 }
@@ -87,6 +104,5 @@ export function saveWeight(entry: WeightEntry) {
   localStorage.setItem(KEYS.weight, JSON.stringify(log))
 }
 export function getLatestWeight(): number | null {
-  const log = getWeightLog()
-  return log.length ? log[log.length - 1].weight_kg : null
+  const log = getWeightLog(); return log.length ? log[log.length - 1].weight_kg : null
 }

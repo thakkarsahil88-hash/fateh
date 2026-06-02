@@ -6,39 +6,20 @@ import type { SplitType, Equipment, MuscleGroup } from '@/lib/types'
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 function getDayTemplate(split: SplitType, days: number): { label: string; muscle_groups: MuscleGroup[] }[] {
-  const templates: Record<SplitType, { label: string; muscle_groups: MuscleGroup[] }[]> = {
-    full_body: Array.from({ length: days }, (_, i) => ({
-      label: `Full Body ${i + 1}`,
-      muscle_groups: ['chest', 'back', 'legs', 'shoulders', 'core'] as MuscleGroup[],
-    })),
-    upper_lower: [
-      { label: 'Upper A', muscle_groups: ['chest', 'back', 'shoulders', 'biceps', 'triceps'] as MuscleGroup[] },
-      { label: 'Lower A', muscle_groups: ['legs', 'glutes', 'core'] as MuscleGroup[] },
-      { label: 'Upper B', muscle_groups: ['chest', 'back', 'shoulders', 'biceps', 'triceps'] as MuscleGroup[] },
-      { label: 'Lower B', muscle_groups: ['legs', 'glutes', 'core'] as MuscleGroup[] },
-    ].slice(0, days),
+  const templates: Record<string, { label: string; muscle_groups: MuscleGroup[] }[]> = {
+    PPL: [
+      { label: 'Push', muscle_groups: ['chest', 'shoulders', 'triceps'] as MuscleGroup[] },
+      { label: 'Pull', muscle_groups: ['back', 'biceps'] as MuscleGroup[] },
+      { label: 'Legs', muscle_groups: ['legs', 'glutes', 'core'] as MuscleGroup[] },
+    ],
     ULUL: [
       { label: 'Upper', muscle_groups: ['chest', 'back', 'shoulders', 'biceps', 'triceps'] as MuscleGroup[] },
       { label: 'Lower', muscle_groups: ['legs', 'glutes', 'core'] as MuscleGroup[] },
       { label: 'Upper', muscle_groups: ['chest', 'back', 'shoulders', 'biceps', 'triceps'] as MuscleGroup[] },
       { label: 'Lower', muscle_groups: ['legs', 'glutes', 'core'] as MuscleGroup[] },
-    ].slice(0, days),
-    PPL: [
-      { label: 'Push', muscle_groups: ['chest', 'shoulders', 'triceps'] as MuscleGroup[] },
-      { label: 'Pull', muscle_groups: ['back', 'biceps'] as MuscleGroup[] },
-      { label: 'Legs', muscle_groups: ['legs', 'glutes', 'core'] as MuscleGroup[] },
-      { label: 'Push', muscle_groups: ['chest', 'shoulders', 'triceps'] as MuscleGroup[] },
-      { label: 'Pull', muscle_groups: ['back', 'biceps'] as MuscleGroup[] },
-      { label: 'Legs', muscle_groups: ['legs', 'glutes', 'core'] as MuscleGroup[] },
-    ].slice(0, days),
-    push_pull: [
-      { label: 'Push', muscle_groups: ['chest', 'shoulders', 'triceps'] as MuscleGroup[] },
-      { label: 'Pull', muscle_groups: ['back', 'biceps'] as MuscleGroup[] },
-      { label: 'Push', muscle_groups: ['chest', 'shoulders', 'triceps'] as MuscleGroup[] },
-      { label: 'Pull', muscle_groups: ['back', 'biceps'] as MuscleGroup[] },
-    ].slice(0, days),
+    ],
   }
-  return templates[split] ?? templates['full_body']
+  return (templates[split] ?? templates['PPL']).slice(0, days)
 }
 
 export async function POST(req: NextRequest) {
@@ -67,18 +48,17 @@ User details:
 Available exercises (id | name | muscles | difficulty):
 ${exerciseSummary}
 
-Day structure:
+Day structure (sequential, not tied to specific weekdays):
 ${dayTemplates.map((d, i) => `Day ${i + 1}: ${d.label} — targets: ${d.muscle_groups.join(', ')}`).join('\n')}
 
 Rules:
 - For ${duration_mins} min sessions, assign ${duration_mins <= 30 ? '4-5' : duration_mins <= 45 ? '5-6' : duration_mins <= 60 ? '6-8' : '8-10'} exercises per day
-- Goal "${goal}": ${goal === 'strength' ? 'prioritize compound movements, 4-6 reps' : goal === 'hypertrophy' ? 'mix of compounds and isolation, 8-12 reps' : goal === 'endurance' ? 'higher reps 15-20, shorter rest' : 'circuit-friendly, high reps 12-15'}
-- Only use exercises from the list above with appropriate muscles for each day
-- Include at least 1 core exercise per full-body or lower-body day
-- Vary exercises across days
-- Assign sets and reps appropriate for the goal
+- Goal "${goal}": ${goal === 'strength' ? 'prioritize compound movements, 3-5 reps' : goal === 'hypertrophy' ? 'mix of compounds and isolation, 8-12 reps' : goal === 'endurance' ? 'higher reps 15-20, shorter rest' : 'circuit-friendly, high reps 12-15'}
+- Only use exercises with appropriate muscles for each day
+- Include at least 1 core exercise per Legs or Lower day
+- Vary exercises across days (no same exercise on back-to-back days)
 
-Respond with ONLY valid JSON, no markdown, no explanation:
+Respond with ONLY valid JSON, no markdown:
 {
   "plan_name": "string",
   "days": [
@@ -104,12 +84,9 @@ Respond with ONLY valid JSON, no markdown, no explanation:
     try {
       aiPlan = JSON.parse(cleaned)
     } catch {
-      return NextResponse.json({ error: 'AI returned invalid response. Try again.' }, { status: 500 })
+      return NextResponse.json({ error: 'AI returned invalid response. Please try again.' }, { status: 500 })
     }
 
-    const spacing = Math.floor(7 / days_per_week)
-
-    // Build the full plan object to return (client will save to localStorage)
     const plan = {
       id: crypto.randomUUID(),
       name: aiPlan.plan_name ?? `${split_type} Plan`,
@@ -118,10 +95,11 @@ Respond with ONLY valid JSON, no markdown, no explanation:
       duration_mins,
       equipment,
       goal,
+      selected_days,              // which days of week are training days
       created_at: new Date().toISOString(),
       days: aiPlan.days.map((d: any, i: number) => ({
         id: crypto.randomUUID(),
-        day_of_week: selected_days[i] ?? (i * spacing) % 7,
+        day_index: i,             // sequential index, not day of week
         label: dayTemplates[i]?.label ?? d.label,
         muscle_groups: dayTemplates[i]?.muscle_groups ?? [],
         exercises: d.exercises.map((ex: any, j: number) => ({
