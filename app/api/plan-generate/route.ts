@@ -43,7 +43,7 @@ function getDayTemplate(split: SplitType, days: number): { label: string; muscle
 
 export async function POST(req: NextRequest) {
   try {
-    const { days_per_week, split_type, duration_mins, equipment, goal } = await req.json()
+    const { days_per_week, split_type, selected_days, duration_mins, equipment, goal } = await req.json()
 
     const availableExercises = EXERCISES.filter(e =>
       e.equipment.some(eq => equipment.includes(eq))
@@ -121,7 +121,7 @@ Respond with ONLY valid JSON, no markdown, no explanation:
       created_at: new Date().toISOString(),
       days: aiPlan.days.map((d: any, i: number) => ({
         id: crypto.randomUUID(),
-        day_of_week: (i * spacing) % 7,
+        day_of_week: selected_days[i] ?? (i * spacing) % 7,
         label: dayTemplates[i]?.label ?? d.label,
         muscle_groups: dayTemplates[i]?.muscle_groups ?? [],
         exercises: d.exercises.map((ex: any, j: number) => ({
