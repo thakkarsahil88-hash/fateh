@@ -1,19 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk' // eslint-disable-line
-import { createClient } from '@supabase/supabase-js'
+import Anthropic from '@anthropic-ai/sdk'
 import { EXERCISES } from '@/lib/exercises'
 import type { SplitType, Equipment, MuscleGroup } from '@/lib/types'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
-
-// Map split type + days to day labels and muscle groups
 function getDayTemplate(split: SplitType, days: number): { label: string; muscle_groups: MuscleGroup[] }[] {
   const templates: Record<SplitType, { label: string; muscle_groups: MuscleGroup[] }[]> = {
     full_body: Array.from({ length: days }, (_, i) => ({
@@ -52,30 +43,19 @@ function getDayTemplate(split: SplitType, days: number): { label: string; muscle
 
 export async function POST(req: NextRequest) {
   try {
-  const supabase = getSupabase()
-  const body = await req.json()
-  const { phone, days_per_week, split_type, duration_mins, equipment, goal } = body as {
-    phone: string
-    days_per_week: number
-    split_type: SplitType
-    duration_mins: number
-    equipment: Equipment[]
-    goal: string
-  }
+    const { days_per_week, split_type, duration_mins, equipment, goal } = await req.json()
 
-  // Get exercises available for this equipment
-  const availableExercises = EXERCISES.filter(e =>
-    e.equipment.some(eq => (equipment as string[]).includes(eq))
-  )
+    const availableExercises = EXERCISES.filter(e =>
+      e.equipment.some(eq => equipment.includes(eq))
+    )
 
-  const exerciseSummary = availableExercises.map(e =>
-    `${e.id} | ${e.name} | muscles: ${e.muscle_groups.join(',')} | difficulty: ${e.difficulty}`
-  ).join('\n')
+    const exerciseSummary = availableExercises.map(e =>
+      `${e.id} | ${e.name} | muscles: ${e.muscle_groups.join(',')} | difficulty: ${e.difficulty}`
+    ).join('\n')
 
-  const dayTemplates = getDayTemplate(split_type, days_per_week)
+    const dayTemplates = getDayTemplate(split_type as SplitType, days_per_week)
 
-  // Ask Claude to assign exercises to each day
-  const prompt = `You are designing a home gym workout plan.
+    const prompt = `You are designing a home gym workout plan.
 
 User details:
 - Split: ${split_type}
@@ -95,10 +75,10 @@ Rules:
 - Goal "${goal}": ${goal === 'strength' ? 'prioritize compound movements, 4-6 reps' : goal === 'hypertrophy' ? 'mix of compounds and isolation, 8-12 reps' : goal === 'endurance' ? 'higher reps 15-20, shorter rest' : 'circuit-friendly, high reps 12-15'}
 - Only use exercises from the list above with appropriate muscles for each day
 - Include at least 1 core exercise per full-body or lower-body day
-- Vary exercises across days (don't repeat the same exercise on consecutive days)
+- Vary exercises across days
 - Assign sets and reps appropriate for the goal
 
-Respond with ONLY valid JSON, no markdown:
+Respond with ONLY valid JSON, no markdown, no explanation:
 {
   "plan_name": "string",
   "days": [
@@ -111,77 +91,52 @@ Respond with ONLY valid JSON, no markdown:
   ]
 }`
 
-  const message = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 2000,
-    messages: [{ role: 'user', content: prompt }],
-  })
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }],
+    })
 
-  const rawText = message.content[0].type === 'text' ? message.content[0].text : ''
-  // Strip markdown code fences if Claude wrapped the JSON
-  const cleaned = rawText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
-  let planData: any
-  try {
-    planData = JSON.parse(cleaned)
-  } catch {
-    console.error('Raw AI response:', rawText)
-    return NextResponse.json({ error: `Failed to parse AI response: ${rawText.slice(0, 200)}` }, { status: 500 })
-  }
+    const rawText = message.content[0].type === 'text' ? message.content[0].text : ''
+    const cleaned = rawText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
 
-  // Save plan to Supabase
-  const { data: plan, error: planError } = await supabase
-    .from('fateh_plans')
-    .insert({
-      phone,
-      name: planData.plan_name ?? `${split_type} Plan`,
+    let aiPlan: any
+    try {
+      aiPlan = JSON.parse(cleaned)
+    } catch {
+      return NextResponse.json({ error: 'AI returned invalid response. Try again.' }, { status: 500 })
+    }
+
+    const spacing = Math.floor(7 / days_per_week)
+
+    // Build the full plan object to return (client will save to localStorage)
+    const plan = {
+      id: crypto.randomUUID(),
+      name: aiPlan.plan_name ?? `${split_type} Plan`,
       split_type,
       days_per_week,
       duration_mins,
       equipment,
       goal,
-    })
-    .select()
-    .single()
-
-  if (planError) return NextResponse.json({ error: planError.message }, { status: 500 })
-
-  const spacing = Math.floor(7 / days_per_week)
-
-  for (let i = 0; i < planData.days.length; i++) {
-    const dayInfo = planData.days[i]
-    const template = dayTemplates[i]
-    const { data: planDay, error: dayError } = await supabase
-      .from('fateh_plan_days')
-      .insert({
-        plan_id: plan.id,
+      created_at: new Date().toISOString(),
+      days: aiPlan.days.map((d: any, i: number) => ({
+        id: crypto.randomUUID(),
         day_of_week: (i * spacing) % 7,
-        label: template.label,
-        muscle_groups: template.muscle_groups,
-        sort_order: i,
-      })
-      .select()
-      .single()
+        label: dayTemplates[i]?.label ?? d.label,
+        muscle_groups: dayTemplates[i]?.muscle_groups ?? [],
+        exercises: d.exercises.map((ex: any, j: number) => ({
+          exercise_id: ex.exercise_id,
+          sets: ex.sets,
+          reps: ex.reps,
+          rest_seconds: ex.rest_seconds ?? 60,
+          sort_order: j,
+        })),
+      })),
+    }
 
-    if (dayError) continue
-
-    const exerciseRows = dayInfo.exercises.map((ex: any, j: number) => ({
-      plan_day_id: planDay.id,
-      exercise_id: ex.exercise_id,
-      sets: ex.sets,
-      reps: ex.reps,
-      rest_seconds: ex.rest_seconds ?? 60,
-      sort_order: j,
-    }))
-
-    await supabase.from('fateh_plan_exercises').insert(exerciseRows)
-  }
-
-  // Set as current plan on profile
-  await supabase.from('fateh_profiles').update({ current_plan_id: plan.id }).eq('phone', phone)
-
-  return NextResponse.json({ plan_id: plan.id })
+    return NextResponse.json({ plan })
   } catch (e: any) {
     console.error('plan-generate error:', e)
-    return NextResponse.json({ error: e?.message ?? String(e) }, { status: 500 })
+    return NextResponse.json({ error: e?.message ?? 'Unknown error' }, { status: 500 })
   }
 }

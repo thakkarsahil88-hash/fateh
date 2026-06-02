@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getStoredPhone } from '@/lib/usePhone'
-import { createClient } from '@/lib/supabase'
+import { getPlan } from '@/lib/storage'
 import WorkoutClient from './WorkoutClient'
 import { format } from 'date-fns'
 
@@ -12,33 +11,14 @@ export default function WorkoutPage() {
   const [data, setData] = useState<any>(null)
 
   useEffect(() => {
-    const phone = getStoredPhone()
-    if (!phone) { router.replace('/login'); return }
+    const plan = getPlan()
+    if (!plan) { router.replace('/onboarding'); return }
 
-    const supabase = createClient()
     const today = new Date()
     const dayOfWeek = (today.getDay() + 6) % 7
+    const planDay = plan.days.find((d: any) => d.day_of_week === dayOfWeek) ?? null
 
-    async function load() {
-      const { data: profile } = await supabase
-        .from('fateh_profiles')
-        .select('current_plan_id')
-        .eq('phone', phone)
-        .single()
-
-      if (!profile?.current_plan_id) { router.replace('/onboarding'); return }
-
-      const { data: planDay } = await supabase
-        .from('fateh_plan_days')
-        .select('*, plan_exercises:fateh_plan_exercises(exercise_id, sets, reps, rest_seconds, sort_order)')
-        .eq('plan_id', profile.current_plan_id)
-        .eq('day_of_week', dayOfWeek)
-        .maybeSingle()
-
-      setData({ phone, planDay, todayDate: format(today, 'yyyy-MM-dd') })
-    }
-
-    load()
+    setData({ planDay, todayDate: format(today, 'yyyy-MM-dd') })
   }, [router])
 
   if (!data) return (

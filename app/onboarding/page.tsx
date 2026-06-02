@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronRight, ChevronLeft, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { savePlan } from '@/lib/storage'
 import type { SplitType, Equipment } from '@/lib/types'
 
 type Goal = 'strength' | 'hypertrophy' | 'endurance' | 'fat_loss'
@@ -62,20 +63,15 @@ export default function OnboardingPage() {
     setGenerating(true)
     setError('')
     try {
-      const { getStoredPhone } = await import('@/lib/usePhone')
-      const phone = getStoredPhone()
-      if (!phone) { window.location.href = '/login'; return }
       const res = await fetch('/api/plan-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, phone }),
+        body: JSON.stringify(data),
       })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.error ?? 'Failed to generate plan')
-      }
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to generate plan')
+      savePlan(json.plan)
       router.push('/home')
-      router.refresh()
     } catch (e: any) {
       setError(e.message)
       setGenerating(false)
@@ -84,45 +80,23 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen flex flex-col p-6 max-w-lg mx-auto">
-      {/* Progress bar */}
       <div className="flex gap-1.5 mb-8">
         {STEPS.map((_, i) => (
-          <div
-            key={i}
-            className={cn(
-              'h-1 flex-1 rounded-full transition-colors',
-              i <= step ? 'bg-orange-500' : 'bg-zinc-800'
-            )}
-          />
+          <div key={i} className={cn('h-1 flex-1 rounded-full transition-colors', i <= step ? 'bg-orange-500' : 'bg-zinc-800')} />
         ))}
       </div>
 
       <AnimatePresence mode="wait">
-        <motion.div
-          key={step}
-          initial={{ opacity: 0, x: 24 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -24 }}
-          transition={{ duration: 0.2 }}
-          className="flex-1"
-        >
-          {/* Step 0 — days */}
+        <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.2 }} className="flex-1">
+
           {step === 0 && (
             <div>
               <h2 className="text-2xl font-bold mb-2">How many days per week?</h2>
               <p className="text-zinc-400 mb-8">Be realistic — consistency beats perfection.</p>
               <div className="flex gap-3 flex-wrap">
-                {[2, 3, 4, 5, 6].map(d => (
-                  <button
-                    key={d}
-                    onClick={() => setData(prev => ({ ...prev, days_per_week: d }))}
-                    className={cn(
-                      'w-16 h-16 rounded-2xl text-xl font-bold transition-all',
-                      data.days_per_week === d
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
-                    )}
-                  >
+                {[2,3,4,5,6].map(d => (
+                  <button key={d} onClick={() => setData(p => ({...p, days_per_week: d}))}
+                    className={cn('w-16 h-16 rounded-2xl text-xl font-bold transition-all', data.days_per_week === d ? 'bg-orange-500 text-white' : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800')}>
                     {d}
                   </button>
                 ))}
@@ -130,23 +104,14 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Step 1 — split */}
           {step === 1 && (
             <div>
               <h2 className="text-2xl font-bold mb-2">Choose your split</h2>
               <p className="text-zinc-400 mb-6">How do you want to structure your week?</p>
               <div className="space-y-3">
                 {SPLITS.map(s => (
-                  <button
-                    key={s.value}
-                    onClick={() => setData(prev => ({ ...prev, split_type: s.value }))}
-                    className={cn(
-                      'w-full text-left p-4 rounded-2xl border transition-all',
-                      data.split_type === s.value
-                        ? 'border-orange-500 bg-orange-500/10'
-                        : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'
-                    )}
-                  >
+                  <button key={s.value} onClick={() => setData(p => ({...p, split_type: s.value}))}
+                    className={cn('w-full text-left p-4 rounded-2xl border transition-all', data.split_type === s.value ? 'border-orange-500 bg-orange-500/10' : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700')}>
                     <div className="font-semibold">{s.label}</div>
                     <div className="text-sm text-zinc-400">{s.desc}</div>
                   </button>
@@ -155,23 +120,14 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Step 2 — duration */}
           {step === 2 && (
             <div>
               <h2 className="text-2xl font-bold mb-2">Time per session?</h2>
               <p className="text-zinc-400 mb-8">We'll fit the right number of exercises in.</p>
               <div className="flex gap-3 flex-wrap">
-                {[20, 30, 45, 60, 90].map(mins => (
-                  <button
-                    key={mins}
-                    onClick={() => setData(prev => ({ ...prev, duration_mins: mins }))}
-                    className={cn(
-                      'px-5 py-4 rounded-2xl font-semibold transition-all',
-                      data.duration_mins === mins
-                        ? 'bg-orange-500 text-white'
-                        : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'
-                    )}
-                  >
+                {[20,30,45,60,90].map(mins => (
+                  <button key={mins} onClick={() => setData(p => ({...p, duration_mins: mins}))}
+                    className={cn('px-5 py-4 rounded-2xl font-semibold transition-all', data.duration_mins === mins ? 'bg-orange-500 text-white' : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800')}>
                     {mins} min
                   </button>
                 ))}
@@ -179,7 +135,6 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Step 3 — equipment */}
           {step === 3 && (
             <div>
               <h2 className="text-2xl font-bold mb-2">What equipment do you have?</h2>
@@ -188,23 +143,8 @@ export default function OnboardingPage() {
                 {EQUIPMENT_OPTIONS.map(eq => {
                   const selected = data.equipment.includes(eq.value)
                   return (
-                    <button
-                      key={eq.value}
-                      onClick={() => {
-                        setData(prev => ({
-                          ...prev,
-                          equipment: selected
-                            ? prev.equipment.filter(e => e !== eq.value)
-                            : [...prev.equipment, eq.value],
-                        }))
-                      }}
-                      className={cn(
-                        'w-full flex items-center gap-3 p-4 rounded-2xl border transition-all',
-                        selected
-                          ? 'border-orange-500 bg-orange-500/10'
-                          : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'
-                      )}
-                    >
+                    <button key={eq.value} onClick={() => setData(p => ({...p, equipment: selected ? p.equipment.filter(e => e !== eq.value) : [...p.equipment, eq.value]}))}
+                      className={cn('w-full flex items-center gap-3 p-4 rounded-2xl border transition-all', selected ? 'border-orange-500 bg-orange-500/10' : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700')}>
                       <span className="text-2xl">{eq.emoji}</span>
                       <span className="font-medium">{eq.label}</span>
                     </button>
@@ -214,23 +154,14 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Step 4 — goal */}
           {step === 4 && (
             <div>
               <h2 className="text-2xl font-bold mb-2">What's your goal?</h2>
               <p className="text-zinc-400 mb-6">This shapes rep ranges and rest times.</p>
               <div className="space-y-3">
                 {GOALS.map(g => (
-                  <button
-                    key={g.value}
-                    onClick={() => setData(prev => ({ ...prev, goal: g.value }))}
-                    className={cn(
-                      'w-full text-left p-4 rounded-2xl border transition-all',
-                      data.goal === g.value
-                        ? 'border-orange-500 bg-orange-500/10'
-                        : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'
-                    )}
-                  >
+                  <button key={g.value} onClick={() => setData(p => ({...p, goal: g.value}))}
+                    className={cn('w-full text-left p-4 rounded-2xl border transition-all', data.goal === g.value ? 'border-orange-500 bg-orange-500/10' : 'border-zinc-800 bg-zinc-900 hover:border-zinc-700')}>
                     <div className="font-semibold">{g.label}</div>
                     <div className="text-sm text-zinc-400">{g.desc}</div>
                   </button>
@@ -243,34 +174,20 @@ export default function OnboardingPage() {
 
       {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
 
-      {/* Navigation */}
       <div className="flex gap-3 mt-8">
         {step > 0 && (
-          <button
-            onClick={back}
-            className="flex items-center gap-1 px-5 py-3 rounded-xl bg-zinc-900 text-zinc-300 hover:bg-zinc-800 transition-colors"
-          >
+          <button onClick={back} className="flex items-center gap-1 px-5 py-3 rounded-xl bg-zinc-900 text-zinc-300 hover:bg-zinc-800 transition-colors">
             <ChevronLeft size={18} /> Back
           </button>
         )}
         {step < STEPS.length - 1 ? (
-          <button
-            onClick={next}
-            className="flex-1 flex items-center justify-center gap-1 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold transition-colors"
-          >
+          <button onClick={next} className="flex-1 flex items-center justify-center gap-1 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold transition-colors">
             Next <ChevronRight size={18} />
           </button>
         ) : (
-          <button
-            onClick={generate}
-            disabled={generating || data.equipment.length === 0}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold transition-colors"
-          >
-            {generating ? (
-              <><Loader2 size={18} className="animate-spin" /> Building your plan…</>
-            ) : (
-              'Generate My Plan'
-            )}
+          <button onClick={generate} disabled={generating || data.equipment.length === 0}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold transition-colors">
+            {generating ? <><Loader2 size={18} className="animate-spin" /> Building your plan…</> : 'Generate My Plan'}
           </button>
         )}
       </div>

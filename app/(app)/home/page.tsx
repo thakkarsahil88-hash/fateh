@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getStoredPhone } from '@/lib/usePhone'
-import { createClient } from '@/lib/supabase'
+import { getPlan, getWorkoutDates, getLatestWeight } from '@/lib/storage'
 import HomeClient from './HomeClient'
 import { format } from 'date-fns'
 
@@ -12,56 +11,21 @@ export default function HomePage() {
   const [data, setData] = useState<any>(null)
 
   useEffect(() => {
-    const phone = getStoredPhone()
-    if (!phone) { router.replace('/login'); return }
+    const plan = getPlan()
+    if (!plan) { router.replace('/onboarding'); return }
 
-    const supabase = createClient()
     const today = new Date()
     const todayISO = format(today, 'yyyy-MM-dd')
     const dayOfWeek = (today.getDay() + 6) % 7
+    const todayPlanDay = plan.days.find((d: any) => d.day_of_week === dayOfWeek) ?? null
 
-    async function load() {
-      const { data: profile } = await supabase
-        .from('fateh_profiles')
-        .select('*, fateh_plans(*)')
-        .eq('phone', phone)
-        .single()
-
-      if (!profile?.current_plan_id) { router.replace('/onboarding'); return }
-
-      const { data: todayPlanDay } = await supabase
-        .from('fateh_plan_days')
-        .select('*, plan_exercises:fateh_plan_exercises(*)')
-        .eq('plan_id', profile.current_plan_id)
-        .eq('day_of_week', dayOfWeek)
-        .maybeSingle()
-
-      const { data: recentWorkouts } = await supabase
-        .from('fateh_workout_logs')
-        .select('date')
-        .eq('phone', phone)
-        .gte('date', format(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'))
-        .order('date', { ascending: false })
-
-      const { data: latestWeight } = await supabase
-        .from('fateh_body_weight_log')
-        .select('weight_kg')
-        .eq('phone', phone)
-        .order('date', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      setData({
-        profile,
-        todayPlanDay,
-        workoutDates: recentWorkouts?.map((w: any) => w.date) ?? [],
-        latestWeight: latestWeight?.weight_kg ?? null,
-        todayDate: todayISO,
-        phone,
-      })
-    }
-
-    load()
+    setData({
+      plan,
+      todayPlanDay,
+      workoutDates: getWorkoutDates(),
+      latestWeight: getLatestWeight(),
+      todayDate: todayISO,
+    })
   }, [router])
 
   if (!data) return (
